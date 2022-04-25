@@ -21,7 +21,7 @@ Tested on :
 
 It is working on x86 and x64 applications, you can easily add some new features using the library and using what I already did.
 
-This project is a DLL and can be inject in every application you want to hook.
+This project is a DLL and can be inject in every application you want to hook, the default prefix identifier is "$pwn".
 
 ## :rocket: Getting Started :
 
