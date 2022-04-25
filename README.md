@@ -1,2 +1,40 @@
-# Basic-Rootkit
-POC Ring3 Windows Rootkit (x86 / x64) - Hide processes and files
+![Banner](https://raw.githubusercontent.com/adamhlt/Basic-Rootkit/main/Ressources/banner.png?token=GHSAT0AAAAAABT5ONAGSNPSQKYM2YPD3SMKYTG4XYA)
+
+# Basic Rootkit
+
+[![C++](https://img.shields.io/badge/language-C%2B%2B-%23f34b7d.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/C%2B%2B) [![Windows](https://img.shields.io/badge/platform-Windows-0078d7.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/Microsoft_Windows) [![x86](https://img.shields.io/badge/arch-x86-red.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/X86) [![x64](https://img.shields.io/badge/arch-x64-green.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/X64)
+
+## :open_book: Project Overview :
+
+This is project is a simple Windows ring 3 rootkit. It use my [IAT Hook library](https://github.com/adamhlt/IAT-Hooking) to perform hooking.
+
+Rootkit functionnalities :
+
+- Hide processes
+- Hide files
+
+Tested on :
+
+- Task Manager (Windows 10 - x64)
+- Explorer (Windows 10 - x64)
+- Process Hacker (Windows 10 - x86)
+
+It is working on x86 and x64 applications, you can easily add some new features using the library and using what I already did.
+
+This project is a DLL and can be inject in every application you want to hook.
+
+## :rocket: Getting Started :
+
+### Visual Studio :
+
+1. Open the solution file (.sln).
+2. Build the project in Debug / Release (x86 / x64)
+
+### Other IDE using CMAKE :
+
+You can easily carry this project on CMAKE.
+
+:warning: If you have any linking error when compiling make sure you include "Shlwapi.lib" to the project.
+
+## :test_tube: Demonstration :
+
