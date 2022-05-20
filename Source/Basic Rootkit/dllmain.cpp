@@ -90,7 +90,7 @@ void InitHook()
 void RemoveHookAndFreeLibrary(const HMODULE hModule)
 {
     IAT::Hook("ntdll.dll", "NtQuerySystemInformation", (LPVOID)lpOrgNtQuerySystemInformation);
-	IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", (LPVOID)lpOrgNtQueryDirectoryFile, "windows.storage.dll");
+    IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", (LPVOID)lpOrgNtQueryDirectoryFile, "windows.storage.dll");
 
     FreeLibraryAndExitThread(hModule, 0);
 }
