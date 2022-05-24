@@ -1,4 +1,4 @@
-![Banner](https://raw.githubusercontent.com/adamhlt/Basic-Rootkit/main/Ressources/banner.png?token=GHSAT0AAAAAABT5ONAGSNPSQKYM2YPD3SMKYTG4XYA)
+![Banner](https://user-images.githubusercontent.com/48086737/170067719-e1765842-3eb4-4c9b-b24e-6fc4f3c4c3dc.png)
 
 # Basic Rootkit
 
