@@ -34,7 +34,8 @@ This project is a DLL and can be inject in every application you want to hook, t
 
 You can easily carry this project on CMAKE.
 
-:warning: If you have any linking error when compiling make sure you include "Shlwapi.lib" to the project.
+> **Warning** <br>
+> If you have any linking error when compiling make sure you include "Shlwapi.lib" to the project.
 
 ## :test_tube: Demonstration :
 
