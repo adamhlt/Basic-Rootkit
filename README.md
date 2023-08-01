@@ -1,6 +1,14 @@
-![Banner](https://user-images.githubusercontent.com/48086737/170067719-e1765842-3eb4-4c9b-b24e-6fc4f3c4c3dc.png)
-
-# Basic Rootkit
+```
+                       ____             _         ____              __  __   _ __ 
+                      / __ )____ ______(_)____   / __ \____  ____  / /_/ /__(_) /_
+                     / __  / __ `/ ___/ / ___/  / /_/ / __ \/ __ \/ __/ //_/ / __/
+                    / /_/ / /_/ (__  ) / /__   / _, _/ /_/ / /_/ / /_/ ,< / / /_
+                   /_____/\__,_/____/_/\___/  /_/ |_|\____/\____/\__/_/|_/_/\__/
+                                                                     
+                                                                     
+                                POC Ring3 Windows Rootkit (x86 / x64)
+                                      Hide processes and files
+```
 
 [![C++](https://img.shields.io/badge/language-C%2B%2B-%23f34b7d.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/C%2B%2B) [![Windows](https://img.shields.io/badge/platform-Windows-0078d7.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/Microsoft_Windows) [![x86](https://img.shields.io/badge/arch-x86-red.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/X86) [![x64](https://img.shields.io/badge/arch-x64-green.svg?style=for-the-badge&logo=appveyor)](https://en.wikipedia.org/wiki/X64)
 
