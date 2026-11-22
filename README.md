@@ -2,7 +2,7 @@
 
 # Basic Rootkit
 
-**POC ring 3 Windows rootkit in C++ (x86 / x64), hide processes and files**
+**POC ring 3 Windows rootkit in C++ (x86 / x64), hide processes, files, registry keys and services**
 
 ![Language](https://img.shields.io/badge/C%2B%2B-16171C?logo=cplusplus)
 ![Platform](https://img.shields.io/badge/Windows-16171C)
@@ -13,9 +13,9 @@
 
 ---
 
-Basic Rootkit is a proof-of-concept ring 3 Windows rootkit that hides processes and files from the running system.
+Basic Rootkit is a proof-of-concept ring 3 Windows rootkit that hides processes, files, registry keys and services from the running system.
 
-It is built as a DLL that patches the Import Address Table (IAT) of the host process, redirecting `NtQuerySystemInformation` and `NtQueryDirectoryFile` to filtered versions. Every entry whose name contains the `$pwn` identifier is unlinked from the returned list, so the hidden process or file becomes invisible to the tools that enumerate them. The same code base handles x86 and x64 applications.
+It is built as a DLL that patches the Import Address Table (IAT) of the host process, redirecting several `Nt*` and Win32 functions to filtered versions. Every entry whose name contains a hidden token is unlinked from the returned list, so the target becomes invisible to the tools that enumerate it. The same code base handles x86 and x64 applications.
 
 ## Features
 
@@ -25,7 +25,35 @@ It is built as a DLL that patches the Import Address Table (IAT) of the host pro
 **Hide files**
 - Unlink matching files from `NtQueryDirectoryFile` (`FileIdBothDirectoryInformation`)
 
+**Hide registry keys and values**
+- Skip matching keys and values from `NtEnumerateKey` and `NtEnumerateValueKey`
+
+**Hide services**
+- Remove matching services from `EnumServicesStatusExW`
+
+**Hide the injected DLL**
+- Unlink the DLL from the PEB loader lists so it disappears from `EnumProcessModules` and module snapshots
+
+**Protect the host process**
+- Strip `PROCESS_TERMINATE` in `NtOpenProcess` so the host process cannot be terminated from the outside
+
 It has been tested with Task Manager (x64), Explorer (x64) and Process Hacker (x86) on Windows 10.
+
+## Configuration
+
+The identifier used to mark the entries to hide defaults to `$pwn`. It can be overridden at load time, in this order:
+
+- The `ROOTKIT_TOKENS` environment variable (several tokens separated by `;`, `,` or newlines)
+- A `rootkit.tokens` file placed next to the DLL (one token per line, `#` starts a comment)
+- The `$pwn` default
+
+Hiding can also be toggled at runtime through the exported functions:
+
+```c
+void EnableHiding();
+void DisableHiding();
+BOOL IsHidingEnabled();
+```
 
 ## Demonstration
 
@@ -35,7 +63,7 @@ https://user-images.githubusercontent.com/48086737/165148912-5030612b-e3a7-491b-
 
 ## Usage
 
-This project produces a DLL that can be injected into any application you want to hook. Every process or file whose name contains the default `$pwn` identifier is hidden from the IAT hooks.
+This project produces a DLL that can be injected into any application you want to hook. Every entry whose name contains a hidden token is removed from the hooks described above.
 
 ## Build
 
