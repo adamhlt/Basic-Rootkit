@@ -1,0 +1,13 @@
+# Visual Studio
+.vs/
+Debug/
+Release/
+x64/
+x86/
+*.user
+*.aps
+*.VC.db
+*.VC.opendb
+*.opendb
+*.suo
+*.log
