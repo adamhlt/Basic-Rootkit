@@ -2,7 +2,7 @@
 
 # Basic Rootkit
 
-**POC ring 3 Windows rootkit in C++ (x86 / x64), hide processes, files, registry keys and services**
+**POC ring 3 Windows rootkit in C++ (x86 / x64), hide processes, files, registry keys, services and the injected DLL**
 
 ![Language](https://img.shields.io/badge/C%2B%2B-16171C?logo=cplusplus)
 ![Platform](https://img.shields.io/badge/Windows-16171C)
@@ -13,7 +13,7 @@
 
 ---
 
-Basic Rootkit is a proof-of-concept ring 3 Windows rootkit that hides processes, files, registry keys and services from the running system.
+Basic Rootkit is a proof-of-concept ring 3 Windows rootkit that hides processes, files, registry keys and services from the running system, hides itself from the module list and protects its host process.
 
 It is built as a DLL that patches the Import Address Table (IAT) of the host process, redirecting several `Nt*` and Win32 functions to filtered versions. Every entry whose name contains a hidden token is unlinked from the returned list, so the target becomes invisible to the tools that enumerate it. The same code base handles x86 and x64 applications.
 
@@ -63,7 +63,9 @@ https://user-images.githubusercontent.com/48086737/165148912-5030612b-e3a7-491b-
 
 ## Usage
 
-This project produces a DLL that can be injected into any application you want to hook. Every entry whose name contains a hidden token is removed from the hooks described above.
+This project produces a DLL that can be injected into any application you want to hook. Once loaded, every entry whose name contains a hidden token is removed from the hooks described above, and the DLL itself disappears from the module list.
+
+The hidden token must be part of the name of the process, file, registry key/value or service you want to hide (for example a process whose executable is named `payload$pwn.exe`).
 
 ## Build
 
@@ -77,6 +79,10 @@ You can also easily carry this project to CMake.
 
 > **Warning** <br>
 > If you have any linking error when compiling make sure you include "Shlwapi.lib" to the project.
+
+## Disclaimer
+
+This project is provided for educational and research purposes only, to study how user-mode rootkits work. Use it only on systems you own or are explicitly authorized to test.
 
 ## License
 
